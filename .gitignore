@@ -1,0 +1,8 @@
+# MRIs
+data/*
+
+# VSCode config
+.vscode
+
+# Python virtual environment
+venv
