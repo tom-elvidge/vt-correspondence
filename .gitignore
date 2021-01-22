@@ -1,6 +1,9 @@
 # MRIs
 data/*
 
+# Output files
+surface_models/preprocessed/*
+
 # VSCode config
 .vscode
 
