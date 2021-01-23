@@ -3,6 +3,8 @@ data/*
 
 # Output files
 surface_models/preprocessed/*
+surface_models/osseous_masks/*
+temp/*
 
 # VSCode config
 .vscode
