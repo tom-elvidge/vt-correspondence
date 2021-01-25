@@ -1,3 +1,6 @@
 numpy
 nibabel
 scipy
+matplotlib
+scikit-image
+numpy-stl
