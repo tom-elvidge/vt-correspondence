@@ -17,7 +17,7 @@ def preprocess(file_path):
 
     # Smooth with a median filter to preserve edges.
     print("Applying median filter...")
-    mri = median_filter(mri, size=5)
+    mri = median_filter(mri, size=9)
 
     # Clip and normalise voxels.
     print("Normalising...")
