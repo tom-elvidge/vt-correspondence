@@ -72,23 +72,25 @@ def osseous_mask(file_path):
     mri = nifti_file.get_fdata()
 
     # Hardcoded seed. Centre works for almost the entire dataset.
-    seed = (81, 513, 513)
+    # seed = (81, 513, 513)
+    seed = (40, 255, 255)
 
-    # Generate 6 progressively smoother masks. Will manually select the most appropiate.
+    # Generate 8 progressively smoother masks. Will manually select the most appropiate.
     i = 1
-    max_iterations = 7
+    max_iterations = 6
     while i < max_iterations:
         print("\nSmoothing iteration {}.".format(i))
 
         # Apply Gaussian filter.
         print("Applying Gaussian filter...")
-        mri = gaussian_filter(mri, sigma=3) # Greater sigma than paper since it was taking too long.
+        #mri = gaussian_filter(mri, sigma=4) # Greater sigma than paper since it was taking too long.
+        mri = gaussian_filter(mri, sigma=2) 
 
         # Generate mask.
         print("Generating mask via iterative region growing...")
         # Hardcoded threshold from experimentation.
         # Limit the iterations, large enough to fill the vocal tract but not the air around the head.
-        mask = mask_region_growing(seed, mri, 0.1, 20000000)
+        mask = mask_region_growing(seed, mri, 0.1, 10000000)
 
         # Save mask as a new nifti file.
         mask_path = "surface_models\\osseous_masks\\" + file_path.split("\\")[2].split(".")[0] + "_mask_{}.nii".format(i)

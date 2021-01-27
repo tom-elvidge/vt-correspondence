@@ -12,12 +12,12 @@ def preprocess(file_path):
     mri = nifti_file.get_fdata()
 
     # Linear interpolation (order=1) in all axis to double size (8-fold???).
-    print("Scaling...")
-    mri = zoom(mri, (2, 2, 2), order=1)
+    # print("Scaling...")
+    # mri = zoom(mri, (2, 2, 2), order=1)
 
     # Smooth with a median filter to preserve edges.
     print("Applying median filter...")
-    mri = median_filter(mri, size=9)
+    mri = median_filter(mri, size=5)
 
     # Clip and normalise voxels.
     print("Normalising...")
