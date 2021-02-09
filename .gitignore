@@ -1,10 +1,11 @@
 # Raw MRIs
 data/*
+mris/*
 
 # Output files
-surface_models/preprocessed/*
-surface_models/osseous_masks/*
-surface_models/merged_masks/*
+gen_surface_models/preprocessed/*
+gen_surface_models/osseous_masks/*
+gen_surface_models/merged_masks/*
 temp/*
 
 # VSCode config

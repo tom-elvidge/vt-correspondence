@@ -11,22 +11,23 @@ def preprocess(file_path):
     nifti_file = nib.load(file_path)
     mri = nifti_file.get_fdata()
 
-    # Linear interpolation (order=1) in all axis to double size (8-fold???).
-    # print("Scaling...")
-    # mri = zoom(mri, (2, 2, 2), order=1)
+    #Linear interpolation (order=1) in all axis to double size (8-fold???).
+    print("Scaling...")
+    mri = zoom(mri, (2, 2, 2), order=1)
 
     # Smooth with a median filter to preserve edges.
     print("Applying median filter...")
     mri = median_filter(mri, size=5)
 
-    # Clip and normalise voxels.
+    # # Clip and normalise voxels.
     print("Normalising...")
     voxelvals = mri.ravel()
-    minval = np.percentile(voxelvals, 10)
+    # minval = np.percentile(voxelvals, 10)
+    minval = min(voxelvals)
     maxval = max(voxelvals)
-    # Clip 10% lowest intensities to remove noise in air.
-    mri = np.clip(mri, minval, maxval)
-    # Normalise.
+    # # Clip 10% lowest intensities to remove noise in air.
+    # mri = np.clip(mri, minval, maxval)
+    # # Normalise.
     mri = ((mri - minval) / (maxval - minval))
 
     # Save as a new nifti file.
