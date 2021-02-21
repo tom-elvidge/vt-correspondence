@@ -3,4 +3,10 @@ nibabel
 scipy
 matplotlib
 scikit-image
+scikit-learn
+opencv-contrib-python
 numpy-stl
+cython
+beautifulsoup4
+lxml
+# python-pcl

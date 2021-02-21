@@ -6,6 +6,7 @@ mris/*
 gen_surface_models/preprocessed/*
 gen_surface_models/osseous_masks/*
 gen_surface_models/merged_masks/*
+registration/surface_models/*
 temp/*
 
 # VSCode config
@@ -13,3 +14,5 @@ temp/*
 
 # Python virtual environment
 venv
+
+*/__pycache__
