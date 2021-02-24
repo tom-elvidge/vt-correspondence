@@ -1,12 +1,48 @@
-from point_cloud_tools import transform, new_transformation, flattern_vectors, make_vectors
+from point_cloud_tools import transform, new_transformation
 import numpy as np
-from stl import mesh
 from svdt import svdt
 import random
 import math
 
 
-class RANSAC_SVD:
+class TransformationSolver:
+    """
+    Generic class for an algorithm which can find a transformation from a source point cloud to a target point cloud.
+
+    Methods:
+        run(source, target, return_rmse=False, debug=False):
+            Returns the best transformation from source to target. The source and target point clouds should be ordered
+            so matching indicies correspond.
+    """
+
+    def __init__(self):
+        # No attributes shared between all TransformationSolver classes.
+        pass
+
+
+class SVD(TransformationSolver):
+    """
+    Wrapper for the svdt function written by Marcos Duarte.
+
+    Methods:
+        run(source, target, return_rmse=False, debug=False):
+            Returns the best transformation from source to target. The source and target point clouds should be ordered
+            so matching indicies correspond
+    """
+
+    def run(self, source, target, return_rmse=False, debug=False):
+        # Use svdt to compute rotation and translation.
+        R, L, rmse = svdt(source, target, order="row")
+        # Combine rotation and translation into single transformation matrix for this iteration.
+        tr = new_transformation(R, L)
+        # Return rmse if set by user.
+        if return_rmse:
+            return tr, rmse
+        # Otherwise just return the transformation.
+        return tr
+
+
+class RANSAC_SVD(TransformationSolver):
     """
     RANdomly SAmpled Consensus with Singular Value Decomposition for rigid transformations. Estimate the rigid
     transformation between two point clouds using SVD but adding RANSAC to give resistance to outliers.
@@ -27,6 +63,9 @@ class RANSAC_SVD:
     Methods:
         set_error_threshold(error_threshold):
             Setter for _error_threshold.
+
+        decay_error_threshold(decay):
+            Reduces the error threshold.
 
         set_consensus_threshold(consensus_threshold):
             Setter for _consensus_threshold.
@@ -53,6 +92,13 @@ class RANSAC_SVD:
 
     def set_consensus_threshold(self, consensus_threshold):
         self._consensus_threshold = consensus_threshold
+
+    def decay_error_threshold(self, decay):
+        """
+        Reduces the error threshold (error_treshold * decay). Useful when running multiple times and you want to
+        make the error more strict with each iteration.
+        """
+        self._error_threshold = self._error_threshold * decay
 
     def set_iterations(self, iterations):
         self._iterations = iterations

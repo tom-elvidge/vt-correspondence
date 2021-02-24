@@ -13,6 +13,7 @@ from point_cloud_tools import transform, new_transformation, flattern_vectors, m
 import sys
 from multiprocessing import Pool
 import glob
+from transformation_solver import RANSAC_SVD, SVD
 
 
 def plot_3d(points):
@@ -60,9 +61,10 @@ def register(source_filename, source_hp_filename, source_pp, target_filename, ta
     target_landmarks = landmarks[1]
 
     # Get tranformation that registers hard palates.
-    icp = ICP(iterations=10, transformation_solver="ransac_svd")
+    ransac_svd = RANSAC_SVD(error_threshold=5)
+    icp = ICP(iterations=5, transformation_solver=ransac_svd)
     tr, rmses = icp.run(source_hp_verts, target_hp_verts,
-                        source_landmarks, target_landmarks, return_landmark_rmses=True)
+                        source_landmarks, target_landmarks, return_landmark_rmses=True, debug=True)
 
     # # Plot original hard palates.
     # plot_3d_2(s3_c1_hp_verts, s3_n_hp_verts)

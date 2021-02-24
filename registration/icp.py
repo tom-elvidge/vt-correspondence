@@ -1,5 +1,5 @@
 from point_cloud_tools import new_transformation, calc_rmse, transform
-from ransac import RANSAC_SVD
+from transformation_solver import SVD, RANSAC_SVD
 from svdt import svdt
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
@@ -7,7 +7,7 @@ from sklearn.neighbors import NearestNeighbors
 
 class ICP:
 
-    def __init__(self, iterations=10, closest_point_solver="kd_tree", transformation_solver="svd"):
+    def __init__(self, iterations=10, closest_point_solver="kd_tree", transformation_solver=SVD()):
         self._iterations = iterations
         self._closest_point_solver = closest_point_solver
         self._transformation_solver = transformation_solver
@@ -23,10 +23,10 @@ class ICP:
             print("s_landmarks and t_landmarks must have the same number of dimensions")
             return
 
-        # Extra variables needed if using ransac.
-        if self._transformation_solver == "ransac_svd":
-            ransac_error_threshold = 5
-            ransac_error_threshold_decay = 0.9
+        # # Extra variables needed if using ransac.
+        # if self._transformation_solver == "ransac_svd":
+        #     ransac_error_threshold = 5
+        #     ransac_error_threshold_decay = 0.9
 
         # Create copies of source and target to not modify originals.
         intermediate_source = np.copy(source)
@@ -59,25 +59,12 @@ class ICP:
             intermediate_target = intermediate_target[targed_indicies.ravel()]
 
             # Compute transformation that minimises rmse between source and target.
-            if self._transformation_solver == "svd":
-                R, L, rmse = svdt(intermediate_source,
-                                  intermediate_target, order="row")
-                # Combine rotation and translation into single transformation matrix for this iteration.
-                tr_i = new_transformation(R, L)
-            elif self._transformation_solver == "ransac_svd":
-                if debug:
-                    print("RANSAC error threshold: {}".format(
-                        ransac_error_threshold))
-                rsvd = RANSAC_SVD(error_threshold=ransac_error_threshold)
-                tr_i = rsvd.run(intermediate_source,
-                                intermediate_target, debug=debug)
-                # tr_i = ransac_svdt(
-                #     intermediate_source, intermediate_target, 1000, error_threshold=ransac_error_threshold, debug=debug)
-                # Reduce the ransac_error_threshold. More strict with each ICP iteration.
-                ransac_error_threshold = ransac_error_threshold * ransac_error_threshold_decay
-            else:
-                print("{} is not a supported transformation solver".format(
-                    self._transformation_solver))
+            tr_i = self._transformation_solver.run(
+                intermediate_source, intermediate_target, debug=debug)
+
+            # If using RANSAC reduce the error_threshold after each ICP iteration.
+            if type(self._transformation_solver).__name__ == "RANSAC_SVD":
+                self._transformation_solver.decay_error_threshold(0.9)
 
             # Apply current transformation to intermediate_source.
             if debug:
