@@ -6,68 +6,156 @@ import random
 import math
 
 
-def ransac_svdt(source, target, iterations, error_threshold=0, consensus_threshold=0.5, sample_size=3, return_rmse=False, debug=False):
-    # error_threshold of 0 only if there are points which are completely rigid i.e. 0 error between them is possible.
-    # consensus_threshold is the ratio of points which must agree with the model to consider it further.
-    # sample_size is the number of points which are randomly sampled for the initial model.
-    # iterations = log(1-p)/log(1-e^s) where p: probability of success, e: outlier ratio, s: sample size.
+class RANSAC_SVD:
+    """
+    RANdomly SAmpled Consensus with Singular Value Decomposition for rigid transformations. Estimate the rigid
+    transformation between two point clouds using SVD but adding RANSAC to give resistance to outliers.
 
-    best_transformation = np.identity(source.shape[1]+1)
-    best_rmse = 999999999
-    # Correspond source and target indicies.
-    j = 0
-    while j < iterations:
-        # print("iteration {}".format(j))
-        # Get n random indicies from source. Index i in source corresponds to index i in target.
-        maybe_inliers = random.sample(range(0, source.shape[0]), sample_size)
-        # Create array of outlier indicies.
-        maybe_outliers = list(range(0, source.shape[0]))
-        for i in maybe_inliers:
-            maybe_outliers.remove(i)
+    Attributes:
+        _iterations (int):
+            Number of iterations to consider a new random sample.
 
-        # Solve for rotation and translation that gives best registration between randomly selected points from source and target.
-        R, L, rmse = svdt(source[maybe_inliers],
-                          target[maybe_inliers], order="row")
-        tr = new_transformation(R, L)
+        _error_threshold (float):
+            Threshold for the root mean squared error between corresponding points to vote for a transformation.
 
-        # Transform all source points.
-        source_tr = transform(source, tr)
-        # Compute Euclidian distance (error metric) between transformed source points and corresponding target points.
-        # errors = np.dot(source_tr, target.T)
-        # print(errors)
+        _consensus_threshold (float):
+            Proportion of points required to vote for the transformation to consider it as a new best.
 
-        # Consensus voting of outliers.
-        consensus_inliers = []
-        # Euclidian distance between corresponding points down main diagonal.
-        for i in maybe_outliers:
-            # if errors[i, i] < error_threshold:
-            # print(np.dot(source_tr[i], target[i].T))
-            diff = source_tr[i] - target[i]
-            err = np.dot(diff, diff.T)
-            # print(err)
-            if err <= error_threshold:
-                consensus_inliers.append(i)
+        _sample_size (int):
+            Number of points to randomly sample to compute a transformation.
 
-        # d of points left out agree with transformation.
-        agree = (len(consensus_inliers)/len(maybe_outliers))
-        if agree >= consensus_threshold:
+    Methods:
+        set_error_threshold(error_threshold):
+            Setter for _error_threshold.
+
+        set_consensus_threshold(consensus_threshold):
+            Setter for _consensus_threshold.
+
+        set_iterations(iterations):
+            Setter for _iterations.
+
+        set_sample_size(sample_size):
+            Setter for _sample_size.
+
+        run(source, target, return_rmse=False, debug=False):
+            Returns the best transformation from source to target after running RANSAC for _iterations.
+    """
+
+    def __init__(self, iterations=100, error_threshold=0, consensus_threshold=0.5, sample_size=3):
+        # iterations = log(1-p)/log(1-e^s) where p: probability of success, e: outlier ratio, s: sample size.
+        self._iterations = iterations
+        self._error_threshold = error_threshold
+        self._consensus_threshold = consensus_threshold
+        self._sample_size = sample_size
+
+    def set_error_threshold(self, error_threshold):
+        self._error_threshold = error_threshold
+
+    def set_consensus_threshold(self, consensus_threshold):
+        self._consensus_threshold = consensus_threshold
+
+    def set_iterations(self, iterations):
+        self._iterations = iterations
+
+    def set_sample_size(self, sample_size):
+        self._sample_size = sample_size
+
+    def run(self, source, target, return_rmse=False, debug=False):
+        """
+        Returns the best transformation from source to target after running RANSAC for the specified
+        number of iterations. Matching indexes in source and target should correspond, this is used
+        to evaluate the transformation.
+
+        Parameters:
+            source (numpy.double):
+                The point cloud to transform.
+
+            target (numpy.double):
+                The point cloud to try and transform source close to.
+
+            return_rmse (bool):
+                If True then it also returns the rmse of the best transformation.
+
+            debug (bool):
+                If True then it prints debug messages while running.
+
+        Returns:
+            best_transformation (numpy.double):
+                The best transformation from source to target.
+
+            best_rmse (numpy.double):
+                Only returned if return_rmse passed as True.
+                The root mean squared error between the transformed source and target.
+        """
+        # Keep track of the current best transformation and it's associated rmse.
+        # Initially the identity matrix since this does no transformation.
+        best_transformation = np.identity(source.shape[1]+1)
+        # Initally the best_rmse is very high.
+        best_rmse = 9999
+
+        # Run RANSAC _iterations times.
+        j = 0
+        while j < self._iterations:
             if debug:
-                print(agree)
-            all_inliers = maybe_inliers + consensus_inliers
-            # New transformation on all inliers.
-            R, L, rmse = svdt(source[all_inliers],
-                              target[all_inliers], order="row")
-            if rmse < best_rmse:
-                if debug:
-                    print("new best")
-                best_transformation = new_transformation(R, L)
-                best_rmse = rmse
+                print("RANSAC iteration {}".format(j))
 
-        # Next randomly sampled model.
-        j += 1
-    # Return the best transformation and it's rmse.
-    if best_rmse == 999999999:
-        best_rmse = None
-    if return_rmse:
-        return best_transformation, best_rmse
-    return best_transformation
+            # Get _sample_size many random indicies from source.
+            # Index i in source should correspond to index i in target.
+            maybe_inliers = random.sample(
+                range(0, source.shape[0]), self._sample_size)
+            # Create a list of outlier indicies.
+            maybe_outliers = list(range(0, source.shape[0]))
+            for i in maybe_inliers:
+                maybe_outliers.remove(i)
+
+            # Get best rotation and translation between randomly sampled points from source and target.
+            R, L, rmse = svdt(source[maybe_inliers],
+                              target[maybe_inliers], order="row")
+            tr = new_transformation(R, L)
+
+            # Apply transformation to source point cloud.
+            source_tr = transform(source, tr)
+
+            # Consensus voting of maybe_outliers.
+            consensus_inliers = []  # Points from maybe_outliers which agree with transformation
+            for i in maybe_outliers:
+                # Compute rmse between transforced source point and corresponding target point.
+                diff = source_tr[i] - target[i]
+                err = math.sqrt(np.dot(diff, diff.T))
+                # Error must be less than threshold for this point to vote for the transformation.
+                if err <= self._error_threshold:
+                    # if debug:
+                    #     print("Vote for transformation ({} <= {}).".format(
+                    #         err, self._error_threshold))
+                    consensus_inliers.append(i)
+
+            # If enough from maybe_outliers vote for the transformation.
+            consensus = (len(consensus_inliers)/len(maybe_outliers))
+            if consensus >= self._consensus_threshold:
+                if debug:
+                    print("Consider for new best transformation ({} >= {}).".format(
+                        consensus, self._consensus_threshold))
+                # Consider this transformation for new best_transformation.
+                all_inliers = maybe_inliers + consensus_inliers
+                R, L, rmse = svdt(source[all_inliers],
+                                  target[all_inliers], order="row")
+                # If better rmse then update best_transformation and best_rmse.
+                if rmse < best_rmse:
+                    if debug:
+                        print("New best transformation found with rmse ({} < {}).".format(
+                            rmse, best_rmse))
+                    best_transformation = new_transformation(R, L)
+                    best_rmse = rmse
+
+            # Try another transformation.
+            j += 1
+
+        # If the best_rmse was never updated set it to None here.
+        if best_rmse == 9999:
+            best_rmse = None
+
+        # Return best_rmse if set by user.
+        if return_rmse:
+            return best_transformation, best_rmse
+        # Otherwise just return best_transformation.
+        return best_transformation
