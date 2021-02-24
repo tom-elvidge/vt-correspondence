@@ -32,8 +32,8 @@ def plot_3d_2(pointsa, pointsb):
 
 def register(source_filename, source_hp_filename, source_pp, target_filename, target_hp_filename, target_pp):
     # Process output filename.
-    output_name = source_filename.split("\\")[-1].split(".")[0]
-    output_dir = "registration\\surface_models\\"
+    output_name = source_filename.split("/")[-1].split(".")[0]
+    output_dir = "registration/surface_models/"
 
     # Load the hard palate mesh for source.
     source_hp = mesh.Mesh.from_file(source_hp_filename)
@@ -60,7 +60,7 @@ def register(source_filename, source_hp_filename, source_pp, target_filename, ta
     target_landmarks = landmarks[1]
 
     # Get tranformation that registers hard palates.
-    icp = ICP(iterations=5, transformation_solver="ransac_svd")
+    icp = ICP(iterations=10, transformation_solver="ransac_svd")
     tr, rmses = icp.run(source_hp_verts, target_hp_verts,
                         source_landmarks, target_landmarks, return_landmark_rmses=True)
 
@@ -99,9 +99,9 @@ if __name__ == "__main__":
     ]
 
     # Get all file paths.
-    full_stl_files = glob.glob("data\\surface_models\\*_final.stl")
-    hp_stl_files = glob.glob("data\\surface_models\\*_final_hp.stl")
-    landmark_files = glob.glob("data\\surface_models\\*.pp")
+    full_stl_files = glob.glob("data/surface_models/*_final.stl")
+    hp_stl_files = glob.glob("data/surface_models/*_final_hp.stl")
+    landmark_files = glob.glob("data/surface_models/*.pp")
 
     # Get parameters for register function.
     register_parameters = []
