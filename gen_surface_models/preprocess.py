@@ -18,7 +18,7 @@ def preprocess(file_path):
 
     # Smooth with a median filter to preserve edges.
     print("Applying median filter...")
-    mri = median_filter(mri, size=5)
+    mri = median_filter(mri, size=9)
 
     # # Clip and normalise voxels.
     print("Normalising...")
@@ -33,7 +33,7 @@ def preprocess(file_path):
 
     # Save as a new nifti file.
     output_filepath = "gen_surface_models/preprocessed/" + \
-        file_path.split("\\")[1].split(".")[0] + "_preprocessed.nii"
+        file_path.split("/")[2].split(".")[0] + "_preprocessed.nii"
     nib.save(nib.Nifti1Image(mri, np.eye(4)), output_filepath)
     print("Saved preprocessed to {}.\n".format(output_filepath))
 

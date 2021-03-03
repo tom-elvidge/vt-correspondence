@@ -5,6 +5,8 @@ import glob
 import sys
 from collections import deque
 from multiprocessing import Pool
+from skimage.measure import marching_cubes
+import matplotlib.pyplot as plt
 
 
 def get_midsagittal_index(volume):
@@ -44,11 +46,12 @@ def mask_region_growing(seed, volume, threshold, max_iterations=sys.maxsize):
         # Update point in mask.
         if volume[point] < threshold:
             mask[point] = 0
-        # Add all neighbours to q (if not already queued).
-        for neighbour in get_neighbours(point):
-            if queued[neighbour] == 0:
-                q.append(neighbour)
-                queued[neighbour] = 1
+            # Only add neighbours to q if current voxel in mask.
+            # Add all neighbours to q (if not already queued).
+            for neighbour in get_neighbours(point):
+                if queued[neighbour] == 0:
+                    q.append(neighbour)
+                    queued[neighbour] = 1
         # Keep track of iterations
         i += 1
     return mask
@@ -78,19 +81,20 @@ def osseous_mask(file_path):
     mri = nifti_file.get_fdata()
 
     # Hardcoded seed. Centre works for almost the entire dataset.
-    seed = (81, 513, 513)
+    seed = (80, 540, 540)
     # seed = (40, 255, 255)
 
     # Generate 8 progressively smoother masks. Will manually select the most appropiate.
     i = 1
-    max_iterations = 6
+    surface_areas = []
+    max_iterations = 15
     while i < max_iterations:
         print("\nSmoothing iteration {}.".format(i))
 
         # Apply Gaussian filter.
         print("Applying Gaussian filter...")
         # Greater sigma than paper since it was taking too long.
-        mri = gaussian_filter(mri, sigma=3)
+        mri = gaussian_filter(mri, sigma=2)
         # mri = gaussian_filter(mri, sigma=2)
 
         # Generate mask.
@@ -100,20 +104,30 @@ def osseous_mask(file_path):
         mask = mask_region_growing(seed, mri, 0.1, 10000000)
 
         # Save mask as a new nifti file.
-        if i == 4 or i == 5:
-            mask_path = "gen_surface_models\\osseous_masks\\" + \
-                file_path.split("\\")[2].split(
-                    ".")[0] + "_mask_{}.nii".format(i)
-            nib.save(nib.Nifti1Image(mask, np.eye(4)), mask_path)
-            print("Saved mask to {}.".format(mask_path))
+        mask_path = "gen_surface_models/osseous_masks/" + \
+            file_path.split("/")[2].split(
+                ".")[0] + "_mask_{}.nii".format(i)
+        nib.save(nib.Nifti1Image(mask, np.eye(4)), mask_path)
+        print("Saved mask to {}.".format(mask_path))
+
+        # Create surface.
+        verts, faces, normals, values = marching_cubes(mask, 0.1)
+        # Compute surface area.
+        surface_areas.append(calc_surface_area(faces, verts))
 
         # Next iteration.
         i += 1
 
+    # Save figure of surface area per iteration.
+    plt.plot(range(1, len(surface_areas)+1), surface_areas)
+    plt.xlabel("Iterations")
+    plt.ylabel("Surface Area")
+    plt.savefig("figures/f_1_3.png")
+
 
 if __name__ == "__main__":
     # Check preprocessed directory for preprocessed MRIs.
-    file_paths = glob.glob("gen_surface_models\\preprocessed\\*.nii")
+    file_paths = glob.glob("gen_surface_models/preprocessed/*.nii")
     print("Found preprocessed MRIs:\n{}".format("\n".join(file_paths)))
 
     # Generate a osseous mask for each preprocessed MRI.
