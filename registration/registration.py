@@ -8,7 +8,7 @@ from mpl_toolkits.mplot3d import proj3d
 from svdt import svdt
 import math
 import random
-from landmarks import meshlab_picked_points_to_dict, correspond_picked_points
+from landmarks import import_meshlab_pp_file, correspond_picked_points
 from point_cloud_tools import transform, new_transformation, flattern_vectors, make_vectors
 import sys
 from multiprocessing import Pool
@@ -53,8 +53,8 @@ def register(source_filename, source_hp_filename, source_pp, target_filename, ta
     target_verts, target_vectors = flattern_vectors(target.vectors)
 
     # Get manual landmarks from picked points file.
-    source_landmarks = meshlab_picked_points_to_dict(source_pp)
-    target_landmarks = meshlab_picked_points_to_dict(target_pp)
+    source_landmarks = import_meshlab_pp_file(source_pp)
+    target_landmarks = import_meshlab_pp_file(target_pp)
     # Reorder landmarks to correspond.
     landmarks = correspond_picked_points([source_landmarks, target_landmarks])
     source_landmarks = landmarks[0]
