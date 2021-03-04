@@ -6,8 +6,9 @@ import sys
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 import glob
-from osseous_mask import mask_region_growing
+from osseous_mask import mask_region_growing, _init_queued, _get_neighbours
 from skimage.measure import marching_cubes
+from constants import SEEDS, OSSEOUS_ROIS, THRESHOLD
 
 
 def merge(mri, mask, merge_position, merge_size):
@@ -26,47 +27,6 @@ def merge(mri, mask, merge_position, merge_size):
         i += 1
 
 
-def init_visited(volume, border):
-    # Fill border with ones so that we don't have to check bounds.
-    visited = np.zeros(volume.shape)
-    visited[0:border, :, :] = 1
-    visited[volume.shape[0]-(border+1):volume.shape[0]-1, :, :] = 1
-    visited[:, 0:border, :] = 1
-    visited[:, volume.shape[1]-(border+1):volume.shape[1]-1, :] = 1
-    visited[:, :, 0:border] = 1
-    visited[:, :, volume.shape[2]-(border+1):volume.shape[2]-1] = 1
-    return visited
-
-
-def extend_mask(mask, roi_start, roi_end):
-    # Scan entire mask and extended anything masked.
-    extended_mask = np.copy(mask)
-    visited = init_visited(mask, 1)
-    i = roi_start[0]
-    while i < roi_end[0]:
-        j = roi_start[1]
-        while j < roi_end[1]:
-            k = roi_start[2]
-            while k < roi_end[2]:
-                point = (i, j, k)
-                # Point is masked and unvisited.
-                if mask[point] == 0 and visited[point] == 0:
-                    for neighbour in get_neighbours(point):
-                        extended_mask[neighbour] = 0  # Mask neighbours.
-                    visited[point] = 1  # Mark original point as visited.
-                k += 1
-            j += 1
-        i += 1
-    return extended_mask
-
-
-def get_neighbours(point):
-    x = point[0]
-    y = point[1]
-    z = point[2]
-    return ((x-1, y, z), (x+1, y, z), (x, y-1, z), (x, y+1, z), (x, y, z-1), (x, y, z+1))
-
-
 def match_file_paths(mask_file_paths, mri_file_paths):
     matches = []
     for mri_file_path in mri_file_paths:
@@ -83,39 +43,34 @@ def match_file_paths(mask_file_paths, mri_file_paths):
     return matches
 
 
-def make_vectors(vertices, vectors_ind):
-    """
-    Combine the vertices and vectors_ind into a single matrix where the vertices are in each vector rather than being indexed.
-
-    Parameters:
-        vertices (numpy.double): KxD matrix of all vertices.
-        vectors_ind (numpy.double): NxM matrix of vectors which indexes vertices.
-
-    Returns:
-        numpy.double: NxMxD matrix, N vectors, M points in each vector, D dimensions in each point.
-    """
-    # New vectors matrix which combines vertices and vectors_ind.
-    vectors = np.zeros(
-        (vectors_ind.shape[0], vectors_ind.shape[1], vertices.shape[1]))
-    # For each vector.
-    i = 0
-    while i < vectors_ind.shape[0]:
-        # For each vertex.
-        j = 0
-        while j < vectors_ind.shape[1]:
-            # Combine vertices and vectors_ind.
-            vectors[i][j] = vertices[int(vectors_ind[i, j]), :]
-            j += 1
-        i += 1
-    return vectors
-
-
 def save_surface(faces, verts, filename):
     solid = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
     for i, f in enumerate(faces):
         for j in range(3):
             solid.vectors[i][j] = verts[f[j], :]
     solid.save(filename)
+
+
+def extend_mask(mask, roi_start, roi_end):
+    # Scan roi and extended anything masked.
+    extended_mask = np.copy(mask)
+    visited = _init_queued(mask)
+    i = roi_start[0]
+    while i < roi_end[0]:
+        j = roi_start[1]
+        while j < roi_end[1]:
+            k = roi_start[2]
+            while k < roi_end[2]:
+                point = (i, j, k)
+                # Point is masked and unvisited.
+                if mask[point] == 0 and visited[point] == 0:
+                    for neighbour in _get_neighbours(point):
+                        extended_mask[neighbour] = 0  # Mask neighbours.
+                    visited[point] = 1  # Mark original point as visited.
+                k += 1
+            j += 1
+        i += 1
+    return extended_mask
 
 
 def generate_isosurface(filepaths):
@@ -132,17 +87,18 @@ def generate_isosurface(filepaths):
     mask = nifti_file.get_fdata()
 
     # Restrict mask to ROI mask.
-    ini = np.asarray((10, 490, 450))  # start
-    s = np.asarray((140, 190, 150))  # size
-    e = ini + s  # end
+    seed = SEEDS[preprocessed_filepath.split("/")[-1]]
+    roi = OSSEOUS_ROIS[preprocessed_filepath.split("/")[-1]]
+    start = np.asarray(roi["start"])
+    end = np.asarray(roi["end"])
     roi_mask = np.zeros(mask.shape)
-    roi_mask[ini[0]:e[0], ini[1]:e[1], ini[2]:e[2]
-             ] = mask[ini[0]:e[0], ini[1]:e[1], ini[2]:e[2]]
+    roi_mask[start[0]:end[0], start[1]:end[1], start[2]:end[2]
+             ] = mask[start[0]:end[0], start[1]:end[1], start[2]:end[2]]
 
     # Extended the mask by 10 voxels.
     i = 0
     while i < 10:
-        roi_mask = extend_mask(roi_mask, ini, e)
+        roi_mask = extend_mask(roi_mask, start, end)
         i += 1
 
     # Add mask on top of preprocessed image.
@@ -151,38 +107,28 @@ def generate_isosurface(filepaths):
 
     # Expecting name to be something like "S1_neutralVT_preprocessed".
     preprocessed_name = preprocessed_filepath.split("/")[-1].split(".")[0]
-    filename = preprocessed_name + "_mask_merged.nii"
-    nib.save(nib.Nifti1Image(prepro_mask, np.eye(4)),
-             "gen_surface_models/merged_masks/{}".format(filename))
+    # Save preprocessed and mask merged.
+    # filename = preprocessed_name + "_mask_merged.nii"
+    # nib.save(nib.Nifti1Image(prepro_mask, np.eye(4)),
+    #          "gen_surface_models/merged_masks/{}".format(filename))
 
     # Generate final mask.
-    final_mask = mask_region_growing((80, 540, 540), prepro_mask, 0.1)
-    # Remove border from mask.
-    final_mask = remove_border(final_mask)
+    final_mask = mask_region_growing(seed, prepro_mask, THRESHOLD)
+    # Save mask
     filename = preprocessed_name + "_final_mask.nii"
     nib.save(nib.Nifti1Image(final_mask, np.eye(4)),
-             "gen_surface_models/merged_masks/{}".format(filename))
+             "gen_surface_models/masks/{}".format(filename))
     # Generate isosurface using same threshold.
-    verts, faces, normals, values = marching_cubes(final_mask, 0.1)
+    verts, faces, normals, values = marching_cubes(final_mask, THRESHOLD)
     # Save as an stl file.
-    filename = preprocessed_name + "_surface.stl"
+    filename = preprocessed_name + ".stl"
     save_surface(
-        faces, verts,  "gen_surface_models/merged_masks/{}".format(filename))
-
-
-def remove_border(mask):
-    mask[0, :, :] = 0
-    mask[mask.shape[0]-1, :, :] = 0
-    mask[:, 0, :] = 0
-    mask[:, mask.shape[1]-1, :] = 0
-    mask[:, :, 0] = 0
-    mask[:, :, mask.shape[2]-1] = 0
-    return mask
+        faces, verts,  "gen_surface_models/surfaces/{}".format(filename))
 
 
 if __name__ == "__main__":
     # Check osseous_masks directory for the osseous masks.
-    mask_file_paths = glob.glob("gen_surface_models/osseous_masks/*.nii")
+    mask_file_paths = glob.glob("gen_surface_models/masks/*_mask_*.nii")
     # Check preprocessed directory for the preprocessed MRIs.
     mri_file_paths = glob.glob("gen_surface_models/preprocessed/*.nii")
     # Match the masks and preprocessed mris.

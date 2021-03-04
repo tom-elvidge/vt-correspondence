@@ -4,8 +4,8 @@ mris/*
 
 # Output files
 gen_surface_models/preprocessed/*
-gen_surface_models/osseous_masks/*
-gen_surface_models/merged_masks/*
+gen_surface_models/masks/*
+gen_surface_models/surfaces/*
 registration/surface_models/*
 temp/*
 
