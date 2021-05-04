@@ -8,6 +8,7 @@ gen_surface_models/masks/*
 gen_surface_models/surfaces/*
 registration/surface_models/*
 temp/*
+deformation/data/*
 
 # VSCode config
 .vscode
