@@ -61,25 +61,34 @@ def register(source_filename, source_hp_filename, source_pp, target_filename, ta
     target_landmarks = landmarks[1]
 
     # Get tranformation that registers hard palates.
-    ransac_svd = RANSAC_SVD(error_threshold=5)
-    icp = ICP(iterations=5, transformation_solver=ransac_svd)
-    tr, rmses = icp.run(source_hp_verts, target_hp_verts,
-                        source_landmarks, target_landmarks, return_landmark_rmses=True, debug=True)
+    solver = RANSAC_SVD(iterations=35, error_threshold=5,
+                        consensus_threshold=0.5, sample_size=3)
+    # solver = SVD()
+    icp = ICP(iterations=5, transformation_solver=solver)
+    tr, lm_rmses, cp_rmses = icp.run(source_hp_verts, target_hp_verts,
+                                     source_landmarks, target_landmarks, return_rmses=True, debug=False)
+
+    print(output_name)
+    print(lm_rmses)
+    print(cp_rmses)
 
     # # Plot original hard palates.
     # plot_3d_2(s3_c1_hp_verts, s3_n_hp_verts)
     # # Plot transformed sourcehard palate against target.
     # plot_3d_2(transform(source_hp_verts, tr), s3_n_hp_verts)
 
-    # Plot landmark_rmses.
-    plt.plot(range(len(rmses)), rmses)
-    plt.xlabel("Iterations")
-    plt.ylabel("Landmark RMSE")
-    # Save plot as an image.
-    plt.savefig(output_dir + output_name + "_pp_rmse_per_iter.png")
+    # # Plot landmark_rmses.
+    # plt.plot(range(len(lm_rmses)), lm_rmses, label="Landmarks")
+    # plt.xlabel("Iterations")
+    # plt.ylabel("RMSE")
+    # # Plot closest point rmses.
+    # plt.plot(range(len(cp_rmses)), cp_rmses, label="Closest Points")
+    # # Save plot as an image.
+    # plt.legend()
+    # plt.savefig(output_dir + output_name + "_rmse_per_iter.png")
 
-    # Transform full source.
-    source_verts_tr = transform(source_verts, tr)
+    # # Transform full source.
+    # source_verts_tr = transform(source_verts, tr)
 
     # # Plot original.
     # plot_3d_2(source_verts, target_verts)

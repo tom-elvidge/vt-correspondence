@@ -106,7 +106,7 @@ class RANSAC_SVD(TransformationSolver):
     def set_sample_size(self, sample_size):
         self._sample_size = sample_size
 
-    def run(self, source, target, return_rmse=False, debug=False):
+    def run(self, source, target, return_rmse=False, return_consensus=False, debug=False):
         """
         Returns the best transformation from source to target after running RANSAC for the specified
         number of iterations. Matching indexes in source and target should correspond, this is used
@@ -138,6 +138,8 @@ class RANSAC_SVD(TransformationSolver):
         best_transformation = np.identity(source.shape[1]+1)
         # Initally the best_rmse is very high.
         best_rmse = 9999
+        # Consensus history.
+        consensus_history = []
 
         # Run RANSAC _iterations times.
         j = 0
@@ -177,6 +179,7 @@ class RANSAC_SVD(TransformationSolver):
 
             # If enough from maybe_outliers vote for the transformation.
             consensus = (len(consensus_inliers)/len(maybe_outliers))
+            consensus_history.append(consensus)
             if consensus >= self._consensus_threshold:
                 if debug:
                     print("Consider for new best transformation ({} >= {}).".format(
@@ -200,8 +203,12 @@ class RANSAC_SVD(TransformationSolver):
         if best_rmse == 9999:
             best_rmse = None
 
-        # Return best_rmse if set by user.
-        if return_rmse:
+        if return_rmse and return_consensus:
+            return best_transformation, best_rmse, consensus_history
+        elif return_rmse:
             return best_transformation, best_rmse
+        elif return_consensus:
+            return best_transformation, consensus_history
         # Otherwise just return best_transformation.
-        return best_transformation
+        else:
+            return best_transformation

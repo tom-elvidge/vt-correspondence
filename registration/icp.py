@@ -17,7 +17,7 @@ class ICP:
             The TransformationSolver object to use to determine the transformation which minimises the error.
 
     Methods:
-        run(source, target, s_landmarks, t_landmarks, return_landmark_rmse=False, debug=False):
+        run(source, target, s_landmarks, t_landmarks, return_rmses=False, debug=False):
             Returns the total transformation computed over all the ICP iterations.
     """
 
@@ -26,7 +26,7 @@ class ICP:
         self._closest_point_solver = closest_point_solver
         self._transformation_solver = transformation_solver
 
-    def run(self, source, target, s_landmarks=None, t_landmarks=None, return_landmark_rmses=False, debug=False):
+    def run(self, source, target, s_landmarks=None, t_landmarks=None, return_rmses=False, debug=False):
         """
         Returns the total transformation computed over all the ICP iterations. Optionally, return the rmse between
         known corresponding landmarks at each iteration.
@@ -47,9 +47,9 @@ class ICP:
             target_landmarks (numpy.double):
                 Known landmarks in the target point cloud. Should be the same shape as source.
 
-            return_landmark_rmses (bool):
-                If True then it also returns the rmse of corresponding landmarks (s_landmarks and t_landmarks) for
-                each iteration of ICP.
+            return_rmses (bool):
+                If True then it also returns the rmse of corresponding landmarks (s_landmarks and t_landmarks) and
+                closest points for each iteration of ICP.
 
             debug (bool):
                 If True then it prints debug messages while running.
@@ -59,8 +59,12 @@ class ICP:
                 The transformation from source to target.
 
             landmark_rmses (numpy.double):
-                Only returned if return_landmark_rmses passed as True.
+                Only returned if return_rmses passed as True.
                 The rmse of corresponding landmarks for each iteration of ICP.
+
+            closest_rmses (numpy.double):
+                Only returned if return_rmses passed as True.
+                The rmse of closest points at each iteration of ICP.
         """
         # Check source and target dimensions.
         if source.shape[1] != target.shape[1]:
@@ -79,12 +83,29 @@ class ICP:
         # Identity matrix as initial transformation.
         tr = np.identity(source.shape[1]+1)
 
-        # Record the root mean squared error per iteration.
-        landmark_rmses = np.zeros(self._iterations)
+        # Record the root mean squared error at the start and per iteration.
+        landmark_rmses = np.zeros(self._iterations + 1)
+        closest_point_rmses = np.zeros(self._iterations + 1)
+        # Initial landmark rmse.
+        landmark_rmses[0] = calc_rmse(s_landmarks, t_landmarks)
+        # Initial closest point rmse.
+        # Determine closest point in target for each point in trasnformed.
+        if self._closest_point_solver == "kd_tree":
+            nn = NearestNeighbors(
+                n_neighbors=1, algorithm="kd_tree").fit(intermediate_target)
+        else:
+            print("{} is not a supported closest point solver".format(
+                self._closest_point_solver))
+        target_indicies = nn.kneighbors(
+            intermediate_source, n_neighbors=1, return_distance=False)
+        initial_closest_points_target = intermediate_target[target_indicies.ravel(
+        )]
+        closest_point_rmses[0] = calc_rmse(
+            intermediate_source, initial_closest_points_target)
 
         # Start running ICP.
-        i = 0
-        while i < self._iterations:
+        i = 1
+        while i < self._iterations + 1:
             if debug:
                 print("ICP iteration {}".format(i))
 
@@ -98,17 +119,18 @@ class ICP:
 
             # Reorder the points in intermediate_target such that the points in intermediate_source
             # and intermediate_target with the same index correspond (as closest points).
-            targed_indicies = nn.kneighbors(
+            target_indicies = nn.kneighbors(
                 intermediate_source, n_neighbors=1, return_distance=False)
-            intermediate_target = intermediate_target[targed_indicies.ravel()]
+            intermediate_target = intermediate_target[target_indicies.ravel()]
 
             # Compute transformation that minimises rmse between source and target.
-            tr_i = self._transformation_solver.run(
-                intermediate_source, intermediate_target, debug=debug)
+            tr_i, cp_rmse = self._transformation_solver.run(
+                intermediate_source, intermediate_target, return_rmse=True, debug=debug)
+            closest_point_rmses[i] = cp_rmse
 
             # If using RANSAC reduce the error_threshold after each ICP iteration.
-            if type(self._transformation_solver).__name__ == "RANSAC_SVD":
-                self._transformation_solver.decay_error_threshold(0.9)
+            # if type(self._transformation_solver).__name__ == "RANSAC_SVD":
+            #     self._transformation_solver.decay_error_threshold(0.9)
 
             # Apply current transformation to intermediate_source.
             if debug:
@@ -119,7 +141,7 @@ class ICP:
             tr = np.dot(tr, tr_i)
 
             # Keep a record of the landmark rmses.
-            if return_landmark_rmses:
+            if return_rmses:
                 landmark_rmses[i] = calc_rmse(
                     transform(s_landmarks, tr), t_landmarks)
 
@@ -127,7 +149,7 @@ class ICP:
             i += 1
 
         # Return the landmark_rmses if set by user.
-        if return_landmark_rmses:
-            return tr, landmark_rmses
+        if return_rmses:
+            return tr, landmark_rmses, closest_point_rmses
         # Otherwise just return the transformation.
         return tr
